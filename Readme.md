@@ -1,14 +1,36 @@
-# Platform
+# EPR
 
-## EPR - Elastic Package Registry
+## Table of contents
 
-### Overview
+<!-- vscode-markdown-toc -->
+* 1. [EPR - Elastic Package Registry](#EPR-ElasticPackageRegistry)
+	* 1.1. [Overview](#Overview)
+	* 1.2. [EPR Architecture](#EPRArchitecture)
+	* 1.3. [EPR Installation](#EPRInstallation)
+		* 1.3.1. [EPR Binary](#EPRBinary)
+		* 1.3.2. [EPR Docker](#EPRDocker)
+* 2. [Elastic Package Management Script](#ElasticPackageManagementScript)
+	* 2.1. [Purpose](#Purpose)
+	* 2.2. [Usage](#Usage)
+		* 2.2.1. [1. Set Required Environment Variables](#SetRequiredEnvironmentVariables)
+		* 2.2.2. [2. Run the Script](#RuntheScript)
+		* 2.2.3. [3. Examples](#Examples)
+
+<!-- vscode-markdown-toc-config
+	numbering=true
+	autoSave=true
+	/vscode-markdown-toc-config -->
+<!-- /vscode-markdown-toc -->
+
+##  1. <a name='EPR-ElasticPackageRegistry'></a>EPR - Elastic Package Registry
+
+###  1.1. <a name='Overview'></a>Overview
 
 Elastic Package Registry referred as EPR, is a service designed to streamline the management and distribution of integrations packages. EPR offers both public and private repositories for package storage and hosting, providing users with a secure, reliable way to share their custom integrations and plugins with others.
 
 EPR simplifies the process by allowing users to create, manage, and publish their own packages. These packages can be easily installed and updated within Kibana using the WebUI. This not only saves time for developers and users but also ensures consistency in deployments across various environments.
 
-### EPR Architecture
+###  1.2. <a name='EPRArchitecture'></a>EPR Architecture
 
 ```mermaid
 flowchart TD
@@ -19,9 +41,9 @@ flowchart TD
     B --> packages@{ shape: disk }
 ```
 
-### EPR Installation
+###  1.3. <a name='EPRInstallation'></a>EPR Installation
 
-#### EPR Binary
+####  1.3.1. <a name='EPRBinary'></a>EPR Binary
 
 **Golang**
 
@@ -160,7 +182,7 @@ Your service will be available on the port 8080 of your server. You can check it
 curl http://localhost:8080/search\?package\={PACKAGE_NAME}\&prerelease\=true
 ```
 
-##### EPR Docker
+####  1.3.2. <a name='EPRDocker'></a>EPR Docker
 
 You can also use the prebuilt docker image :
 
@@ -170,9 +192,9 @@ docker run --rm -it -p 8080:8080 \
   $(docker images -q docker.elastic.co/package-registry/package-registry:main)
 ```
 
-## Elastic Package Management Script
+##  2. <a name='ElasticPackageManagementScript'></a>Elastic Package Management Script
 
-## Purpose
+###  2.1. <a name='Purpose'></a>Purpose
 
 This script automates the process of managing Elastic packages by:
 
@@ -182,9 +204,9 @@ This script automates the process of managing Elastic packages by:
 
 The script simplifies the workflow for administrators and developers who need to manage Elastic integrations efficiently.
 
-## Usage
+###  2.2. <a name='Usage'></a>Usage
 
-### 1. Set Required Environment Variables
+####  2.2.1. <a name='SetRequiredEnvironmentVariables'></a>1. Set Required Environment Variables
 
 Before running the script, ensure the following environment variables are set:
 
@@ -193,7 +215,7 @@ export KIBANA_URL="https://your-kibana-instance:5601"
 export KIBANA_API_KEY="your-kibana-api-key"
 ```
 
-### 2. Run the Script
+####  2.2.2. <a name='RuntheScript'></a>2. Run the Script
 
 ```bash
 ./manage_package.sh <kibana_version> <package_name> [--debug] [--insecure]
@@ -206,7 +228,7 @@ explanations :
 - --debug: Enable verbose output for debugging the search and upload process.
 - --insecure: Allow insecure connections to the Kibana server (useful for self-signed certificates).
 
-### 3. Examples
+####  2.2.3. <a name='Examples'></a>3. Examples
 
 ```bash
 ./manage_package.sh 8.15.2 netskope --debug
