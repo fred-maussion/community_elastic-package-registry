@@ -47,26 +47,41 @@ flowchart TD
 
 **Golang**
 
-Remove any previous Go installation by deleting the /usr/local/go folder (if it exists), then extract the archive you just downloaded into /usr/local, creating a fresh Go tree in /usr/local/go:
+###  2.2. <a name='Golang'></a>Golang
+
+elastic-package is written in go and needs golang to be installed. As a matter of simplicity we will use GVM (Go Version Manger) that will allow to install and manage mutiple version of Go.
+
+**Linux (amd64)**
 
 ```bash
-curl -O https://dl.google.com/go/go1.23.1.linux-amd64.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.1.linux-amd64.tar.gz
+# Linux Example (assumes ~/bin is in PATH).
+curl -sL -o /usr/local/bin/gvm https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-linux-amd64
+chmod +x /usr/local/bin/gvm
+eval "$(gvm 1.23.2)"
+go version
 ```
 
-(You may need to run the command as root or through sudo).
-
-Do not untar the archive into an existing /usr/local/go tree. This is known to produce broken Go installations.
-Add /usr/local/go/bin to the PATH environment variable.
-
-You can do this by adding the following line to your $HOME/.profile or /etc/profile (for a system-wide installation):
+**Linux (arm64)**
 
 ```bash
-export PATH=$PATH:/usr/local/go/bin
+# Linux Example (assumes ~/bin is in PATH).
+curl -sL -o /usr/local/bin/gvm https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-linux-arm64
+chmod +x /usr/local/bin/gvm
+eval "$(gvm 1.23.2)"
+go version
 ```
 
-Note: Changes made to a profile file may not apply until the next time you log into your computer. To apply the changes immediately, just run the shell commands directly or execute them from the profile using a command such as source $HOME/.profile.
-Verify that you've installed Go by opening a command prompt and typing the following command:
+**macOS (universal)**
+
+```bash
+# macOS Example
+sudo curl -sL -o /usr/local/bin/gvm https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-darwin-all
+sudo chmod +x /usr/local/bin/gvm
+eval "$(gvm 1.23.2)"
+go version
+```
+
+[Reference](https://github.com/andrewkroh/gvm)
 
 ```bash
 go version
