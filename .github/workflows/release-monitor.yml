@@ -90,7 +90,7 @@ jobs:
           # Run the build command using the installed mage
           ~/go/bin/mage build
           echo "Build complete. Checking for binary:"
-          ls -l build/
+          ls -l package-registry
 
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
