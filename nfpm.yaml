@@ -35,7 +35,7 @@ contents:
 
   # The binary built from source, placed in a standard binary location
   - src: ./source/package-registry
-    dst: /usr/bin/package-registry
+    dst: /usr/local/bin/package-registry
     file_info:
       mode: 0755 # Make it executable
 
@@ -44,22 +44,6 @@ contents:
     dst: /usr/lib/systemd/system/package-registry.service
 
 # Scripts to run on package installation, upgrade, and removal.
-# These are crucial for managing the lifecycle of the systemd service.
 scripts:
-  postinstall: |
-    #!/bin/sh
-    # On install or upgrade, reload the systemd daemon to recognize the new service
-    # and enable it to start on boot.
-    echo "Reloading systemd daemon..."
-    systemctl daemon-reload
-    echo "Enabling package-registry service..."
-    systemctl enable package-registry.service
-    echo "Service enabled. Start it with: systemctl start package-registry.service"
-  preremove: |
-    #!/bin/sh
-    # Before removing the package, stop and disable the service to clean up gracefully.
-    echo "Stopping package-registry service..."
-    systemctl stop package-registry.service
-    echo "Disabling package-registry service..."
-    systemctl disable package-registry.service
-
+  postinstall: ./scripts/postinstall.sh
+  preremove: ./scripts/preremove.sh
