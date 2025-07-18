@@ -92,18 +92,32 @@ jobs:
           echo "Build complete. Checking for binary:"
           ls -l package-registry
 
+      - name: Modify config.yml
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          CONFIG_FILE=./source/config.yml
+          echo "Original config.yml content:"
+          cat $CONFIG_FILE
+          # Replace the first package path
+          sed -i 's|- ./testdata/package|- /var/package-registry/packages|g' $CONFIG_FILE
+          # Remove the second package path line
+          sed -i '/- .\/testdata\/local-storage/d' $CONFIG_FILE
+          echo "Modified config.yml content:"
+          cat $CONFIG_FILE
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
         env:
           # The version for nfpm is taken from the release tag
           PACKAGE_VERSION: ${{ steps.get_epr_release.outputs.tag }}
         run: |
-          # Use the nfpm command to create the packages.
-          # The --target flag specifies where to save the output packages.
-          # The version is passed via an environment variable that nfpm automatically picks up.
+          # Explicitly pass the version via the --version flag to ensure it overrides any static value.
+          # The version tag is taken directly from the release step.
+          PACKAGE_VERSION=${{ steps.get_epr_release.outputs.tag }}
           echo "Building packages for version ${PACKAGE_VERSION}"
-          ~/go/bin/nfpm package -f nfpm.yaml --packager deb --target .
-          ~/go/bin/nfpm package -f nfpm.yaml --packager rpm --target .
+          
+          ~/go/bin/nfpm package --version "${PACKAGE_VERSION}" -f nfpm.yaml --packager deb --target .
+          ~/go/bin/nfpm package --version "${PACKAGE_VERSION}" -f nfpm.yaml --packager rpm --target .
+          
           echo "Packages built:"
           ls -l *.deb *.rpm
 
