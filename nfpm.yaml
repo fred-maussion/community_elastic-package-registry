@@ -27,12 +27,6 @@ license: "Elastic License v2"
 # The `src` path is relative to the nfpm.yaml file.
 # The `dst` path is the absolute path where the files will be installed on the target system.
 contents:
-  # Data files from the original archive
-  - src: ./source/_meta/
-    dst: /usr/share/elastic-package-registry/data/_meta/
-  - src: ./source/packages/
-    dst: /usr/share/elastic-package-registry/data/packages/
-
   # The config file from the source tarball, marked as a config file
   # so it is not overwritten on package update.
   - src: ./source/config.yml
@@ -40,8 +34,8 @@ contents:
     type: config|noreplace
 
   # The binary built from source, placed in a standard binary location
-  - src: ./source/build/elastic-package
-    dst: /usr/local/bin/elastic-package
+  - src: ./source/package-registry
+    dst: /usr/bin/package-registry
     file_info:
       mode: 0755 # Make it executable
 
