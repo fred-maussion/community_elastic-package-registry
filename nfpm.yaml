@@ -12,7 +12,7 @@ platform: "linux"
 
 # The version will be dynamically injected by the GitHub Actions workflow.
 # nfpm automatically reads the PACKAGE_VERSION environment variable.
-version: "v2.5.0" # This is just a placeholder; it's set in the workflow
+version: ${PACKAGE_VERSION}
 
 # Package metadata
 maintainer: "Fred Maussion <frederic.maussion@elastic.co>"

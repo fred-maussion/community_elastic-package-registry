@@ -104,18 +104,17 @@ jobs:
           sed -i '/- .\/testdata\/local-storage/d' $CONFIG_FILE
           echo "Modified config.yml content:"
           cat $CONFIG_FILE
-          
+      
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
+        env:
+          # This environment variable will be expanded by nfpm inside the nfpm.yaml file.
+          PACKAGE_VERSION: ${{ steps.get_epr_release.outputs.tag }}
         run: |
-          # Explicitly pass the version via the --version flag to ensure it overrides any static value.
-          # The version tag is taken directly from the release step.
-          PACKAGE_VERSION=${{ steps.get_epr_release.outputs.tag }}
-          echo "Building packages for version ${PACKAGE_VERSION}"
-          
-          ~/go/bin/nfpm package --version "${PACKAGE_VERSION}" -f nfpm.yaml --packager deb --target .
-          ~/go/bin/nfpm package --version "${PACKAGE_VERSION}" -f nfpm.yaml --packager rpm --target .
-          
+          echo "Building packages for version ${PACKAGE_VERSION}..."
+          # The version is now correctly set inside nfpm.yaml via env var expansion.
+          ~/go/bin/nfpm package -f nfpm.yaml --packager deb --target .
+          ~/go/bin/nfpm package -f nfpm.yaml --packager rpm --target .
           echo "Packages built:"
           ls -l *.deb *.rpm
 
