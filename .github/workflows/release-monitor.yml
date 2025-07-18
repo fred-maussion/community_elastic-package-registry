@@ -104,11 +104,9 @@ jobs:
           sed -i '/- .\/testdata\/local-storage/d' $CONFIG_FILE
           echo "Modified config.yml content:"
           cat $CONFIG_FILE
+          
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
-        env:
-          # The version for nfpm is taken from the release tag
-          PACKAGE_VERSION: ${{ steps.get_epr_release.outputs.tag }}
         run: |
           # Explicitly pass the version via the --version flag to ensure it overrides any static value.
           # The version tag is taken directly from the release step.
@@ -121,19 +119,27 @@ jobs:
           echo "Packages built:"
           ls -l *.deb *.rpm
 
+      - name: Generate Checksums
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          echo "Generating checksums for packages..."
+          for pkg in *.deb *.rpm; do
+            md5sum "$pkg" > "${pkg}.md5"
+            sha256sum "$pkg" > "${pkg}.sha256"
+          done
+          echo "Checksums generated:"
+          ls -l *.md5 *.sha256
+
       - name: Create GitHub Release
         if: steps.decide.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Create a new release using the GitHub CLI.
-          # The release tag is the one from the upstream repository.
-          # The release notes are the changelog from the upstream release.
-          # All .deb and .rpm files in the current directory are uploaded as release assets.
+          # Create a new release using the GitHub CLI, uploading the packages and their checksums.
           gh release create ${{ steps.get_epr_release.outputs.tag }} \
             --title "Release ${{ steps.get_epr_release.outputs.tag }}" \
             --notes "${{ steps.get_epr_release.outputs.changelog }}" \
-            *.deb *.rpm
+            *.deb *.rpm *.md5 *.sha256
           echo "Successfully created release ${{ steps.get_epr_release.outputs.tag }}"
 
       - name: No new version found
