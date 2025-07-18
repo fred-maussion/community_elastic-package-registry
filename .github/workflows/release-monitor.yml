@@ -1,0 +1,127 @@
+# .github/workflows/release-monitor.yml
+
+name: Build and Release Elastic Package Registry
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+  # Runs on a schedule (once a day at 2:00 AM UTC)
+  schedule:
+    - cron: '0 2 * * *'
+
+# Grant permissions for the GITHUB_TOKEN to create releases and write content.
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21' # nfpm and mage require Go
+
+      - name: Install Mage
+        run: go install github.com/magefile/mage@latest
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Get Latest Elastic Package Registry Release
+        id: get_epr_release
+        run: |
+          # Use the GitHub API to get the latest release information from the target repository
+          LATEST_RELEASE_JSON=$(curl --silent \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/elastic/package-registry/releases/latest)
+
+          # Use jq to parse the JSON and extract the tag name and release notes (changelog)
+          TAG=$(echo "$LATEST_RELEASE_JSON" | jq -r .tag_name)
+          CHANGELOG=$(echo "$LATEST_RELEASE_JSON" | jq -r .body)
+          TARBALL_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r .tarball_url)
+
+          # Pass the extracted data to subsequent steps
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "tarball_url=${TARBALL_URL}" >> $GITHUB_OUTPUT
+          echo "Found latest Elastic Package Registry release: ${TAG}"
+
+      - name: Get Latest Release from this Repo
+        id: get_demo_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Use the GitHub CLI to get the latest release tag from the current repository
+          # The `|| true` prevents the workflow from failing if no releases exist yet
+          LATEST_TAG=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' || true)
+          echo "tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "Latest release in this repo: ${LATEST_TAG}"
+
+      - name: Compare versions and decide to proceed
+        id: decide
+        if: steps.get_epr_release.outputs.tag != steps.get_demo_release.outputs.tag
+        run: |
+          echo "New version found. Proceeding with build and release."
+          echo "proceed=true" >> $GITHUB_OUTPUT
+
+      - name: Download and Extract Source Archive
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          # Download the tarball and extract it.
+          # The `strip-components=1` option removes the top-level directory from the archive,
+          # placing the contents directly into the 'source' directory.
+          mkdir source
+          curl -L ${{ steps.get_epr_release.outputs.tarball_url }} | tar xz -C source --strip-components=1
+          echo "Source code downloaded and extracted to ./source"
+          ls -la ./source
+
+      - name: Build Binary from Source
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          echo "Building binary using mage..."
+          cd source
+          # Run the build command using the installed mage
+          ~/go/bin/mage build
+          echo "Build complete. Checking for binary:"
+          ls -l build/
+
+      - name: Build Packages with nfpm
+        if: steps.decide.outputs.proceed == 'true'
+        env:
+          # The version for nfpm is taken from the release tag
+          PACKAGE_VERSION: ${{ steps.get_epr_release.outputs.tag }}
+        run: |
+          # Use the nfpm command to create the packages.
+          # The --target flag specifies where to save the output packages.
+          # The version is passed via an environment variable that nfpm automatically picks up.
+          echo "Building packages for version ${PACKAGE_VERSION}"
+          ~/go/bin/nfpm package -f nfpm.yaml --packager deb --target .
+          ~/go/bin/nfpm package -f nfpm.yaml --packager rpm --target .
+          echo "Packages built:"
+          ls -l *.deb *.rpm
+
+      - name: Create GitHub Release
+        if: steps.decide.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Create a new release using the GitHub CLI.
+          # The release tag is the one from the upstream repository.
+          # The release notes are the changelog from the upstream release.
+          # All .deb and .rpm files in the current directory are uploaded as release assets.
+          gh release create ${{ steps.get_epr_release.outputs.tag }} \
+            --title "Release ${{ steps.get_epr_release.outputs.tag }}" \
+            --notes "${{ steps.get_epr_release.outputs.changelog }}" \
+            *.deb *.rpm
+          echo "Successfully created release ${{ steps.get_epr_release.outputs.tag }}"
+
+      - name: No new version found
+        if: steps.decide.outputs.proceed != 'true'
+        run: echo "The latest release in this repo already matches the elastic/package-registry release. Nothing to do."

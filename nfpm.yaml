@@ -1,0 +1,71 @@
+# nfpm.yaml
+# This file configures how nfpm builds the packages.
+# Documentation: https://nfpm.goreleaser.com/configuration/
+
+# The name of the package.
+name: "elastic-package-registry"
+
+# The architecture. 'all' is appropriate since these are mostly data files,
+# but if the binary is arch-specific, you might change this.
+arch: "amd64"
+platform: "linux"
+
+# The version will be dynamically injected by the GitHub Actions workflow.
+# nfpm automatically reads the PACKAGE_VERSION environment variable.
+version: "v2.5.0" # This is just a placeholder; it's set in the workflow
+
+# Package metadata
+maintainer: "Fred Maussion <frederic.maussion@elastic.co>"
+description: |
+  Contains the full Elastic Package Registry with data, binary, and service file.
+  This package is built automatically by a GitHub Action.
+vendor: "Community"
+homepage: "https://github.com/elastic/package-registry"
+license: "Elastic License v2"
+
+# This section defines which files and directories to include in the package.
+# The `src` path is relative to the nfpm.yaml file.
+# The `dst` path is the absolute path where the files will be installed on the target system.
+contents:
+  # Data files from the original archive
+  - src: ./source/_meta/
+    dst: /usr/share/elastic-package-registry/data/_meta/
+  - src: ./source/packages/
+    dst: /usr/share/elastic-package-registry/data/packages/
+
+  # The config file from the source tarball, marked as a config file
+  # so it is not overwritten on package update.
+  - src: ./source/config.yml
+    dst: /etc/package-registry/config.yml
+    type: config|noreplace
+
+  # The binary built from source, placed in a standard binary location
+  - src: ./source/build/elastic-package
+    dst: /usr/local/bin/elastic-package
+    file_info:
+      mode: 0755 # Make it executable
+
+  # The systemd service file from your repository
+  - src: ./package-registry.service
+    dst: /usr/lib/systemd/system/package-registry.service
+
+# Scripts to run on package installation, upgrade, and removal.
+# These are crucial for managing the lifecycle of the systemd service.
+scripts:
+  postinstall: |
+    #!/bin/sh
+    # On install or upgrade, reload the systemd daemon to recognize the new service
+    # and enable it to start on boot.
+    echo "Reloading systemd daemon..."
+    systemctl daemon-reload
+    echo "Enabling package-registry service..."
+    systemctl enable package-registry.service
+    echo "Service enabled. Start it with: systemctl start package-registry.service"
+  preremove: |
+    #!/bin/sh
+    # Before removing the package, stop and disable the service to clean up gracefully.
+    echo "Stopping package-registry service..."
+    systemctl stop package-registry.service
+    echo "Disabling package-registry service..."
+    systemctl disable package-registry.service
+

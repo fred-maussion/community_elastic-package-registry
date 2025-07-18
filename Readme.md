@@ -159,7 +159,7 @@ where:
 
 [Reference](https://github.com/elastic/package-storage/issues/390)
 
-To ease the managmeent of the configuration, we can use a systemd unit _/etc/systemd/system/package-registry_ file to start the service automatically on boot :
+To ease the management of the configuration, we can use a systemd unit _/etc/systemd/system/package-registry_ file to start the service automatically on boot :
 
 Simply paste the following content and adapt it if needed:
 

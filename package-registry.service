@@ -1,0 +1,17 @@
+[Unit]
+Description=Elastic Package Registry Services
+
+[Service]
+User=root
+WorkingDirectory=/etc/package-registry
+ExecStart=/etc/package-registry/package-registry -address 0.0.0.0:8080 -config /etc/package-registry/config.yml 
+# optional items below
+Restart=always
+RestartSec=3
+
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=package-registry
+
+[Install]
+WantedBy=multi-user.target
