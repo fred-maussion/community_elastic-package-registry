@@ -11,7 +11,10 @@
     * [Using Pre-built Packages (Recommended)](#using-pre-built-packages-recommended)
     * [Building from Source](#building-from-source)
     * [Using Docker](#using-docker)
-5.  [Usage](#usage)
+5.  [Configuration](#configuration)
+    * [Method 1: Using an Environment File (Recommended)](#method-1-using-an-environment-file-recommended)
+    * [Method 2: Manual Service File Edits (Advanced)](#method-2-manual-service-file-edits-advanced)
+6.  [Usage](#usage)
     * [Managing the Service](#managing-the-service)
     * [Elastic Package Management Script](#elastic-package-management-script)
 
@@ -139,13 +142,195 @@ docker run --rm -it -p 8080:8080 \
   $(docker images -q docker.elastic.co/package-registry/package-registry:main)
 ```
 
+## Configuration
+
+### Method 1: Using the Environment File (Recommended)
+
+This is the best practice for managing configurations as it separates your settings from the main service file, preventing them from being overwritten during package upgrades.
+
+#### Modify the Configuration File Template
+
+Modify the _package-registry-env.conf_ file to hold your custom settings.
+
+```bash
+sudo vim /etc/package-registry/package-registry-env.conf
+```
+
+Paste the desired configurations into this file. You only need to include the variables you want to use. Below is a complete example with all available options:
+
+```ini
+# --- Metrics Configuration ---
+# Address to expose Prometheus metrics on. Uncomment to enable.
+# EPR_METRICS_ADDRESS=0.0.0.0:9000
+
+# --- Proxy Mode Configuration ---
+# Set to true to enable proxy mode.
+# EPR_FEATURE_PROXY_MODE=true
+# The upstream EPR instance to proxy requests to.
+# EPR_PROXY_TO=[https://epr.elastic.co](https://epr.elastic.co)
+
+# --- APM Tracing Configuration ---
+# Sets the service name that appears in the APM UI.
+# ELASTIC_APM_SERVICE_NAME="Elastic Package Integration"
+# Defines the environment (e.g., production, staging) for filtering in the APM UI.
+# ELASTIC_APM_ENVIRONMENT="production"
+# Explicitly enables or disables APM instrumentation.
+# ELASTIC_APM_ACTIVE="true"
+# Address of the APM Server. Instrumentation is disabled if this is not set.
+# ELASTIC_APM_SERVER_URL=https://your-apm-server:8200
+# API key to use to authenticate with the APM Server, if needed.
+# ELASTIC_APM_API_KEY=YourApiKey
+# Secret token for authentication, if configured on the APM Server.
+# ELASTIC_APM_SECRET_TOKEN=YourSecretToken
+# Sample rate for transaction collection (0.0 to 1.0). Default is 1.0 (all transactions).
+# ELASTIC_APM_TRANSACTION_SAMPLE_RATE=1.0
+```
+
+### Method 2: Manual Service File Edits (Advanced)
+
+This method involves directly editing the service file. It is less flexible and your changes may be overwritten by package upgrades. Use this method for quick tests or if you prefer not to use an environment file.
+
+1.  Open the full service file for editing:
+    ```bash
+    sudo systemctl edit --full package-registry.service
+    ```
+
+2.  Modify the `ExecStart` line to add the flags you need. Below are examples for each feature.
+
+    * **To Enable Metrics:**
+        ```ini
+        ExecStart=/usr/bin/package-registry -address 0.0.0.0:8080 -metrics-address 0.0.0.0:9000 -config /etc/package-registry/config.yml
+        ```
+
+    * **To Enable Proxy Mode:**
+        ```ini
+        ExecStart=/usr/bin/package-registry -address 0.0.0.0:8080 --feature-proxy-mode=true -proxy-to=[https://epr.elastic.co](https://epr.elastic.co) -config /etc/package-registry/config.yml
+        ```
+
+    * **To Enable APM Tracing:** Add `Environment` lines directly under the `[Service]` section.
+        ```ini
+        [Service]
+        Environment="ELASTIC_APM_ACTIVE=true"
+        Environment="ELASTIC_APM_SERVER_URL=https://your-apm-server:8200"
+        # ... add other APM variables here ...
+        ExecStart=/usr/bin/package-registry -address 0.0.0.0:8080 -config /etc/package-registry/config.yml
+        ```
+
+3.  Save the file, then reload the systemd daemon and restart the service:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl restart package-registry.service
+    ```
+
+### Enabling Metrics
+
+This configuration is for installations using the pre-built `.deb` or `.rpm` packages. To enable the Prometheus metrics endpoint, you need to edit the systemd service file. This configuration is mandatory to the usage of the official [Elastic Package Registry Integration](https://www.elastic.co/docs/reference/integrations/elastic_package_registry)
+
+1.  Open the service file for editing:
+    ```bash
+    sudo systemctl edit --full package-registry.service
+    ```
+
+2.  Find the `ExecStart` line and add the `-metrics-address` flag to expose the metrics on a different port (e.g., 9000).
+
+    **Before:**
+    ```ini
+    ExecStart=/usr/local/bin/package-registry -address 0.0.0.0:8080 -config /etc/package-registry/config.yml
+    ```
+
+    **After:**
+    ```ini
+    ExecStart=/usr/local/bin/package-registry -address 0.0.0.0:8080 -metrics-address 0.0.0.0:9000 -config /etc/package-registry/config.yml
+    ```
+
+3.  Save the file, then reload the systemd daemon and restart the service to apply the changes:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl restart package-registry.service
+    ```
+    The metrics will now be available at `http://<your-server-ip>:9000/metrics`.
+
+### Enabling Proxy Mode
+
+Proxy mode allows `elastic-package-registry` to act as a cache or proxy for another EPR instance, such as the official one at `epr.elastic.co`. This is useful for air-gapped environments or for reducing external traffic.
+
+1.  Open the service file for editing:
+    ```bash
+    sudo systemctl edit --full package-registry.service
+    ```
+2.  Find the `ExecStart` line and add the `--feature-proxy-mode=true` and `-proxy-to` flags.
+
+    **Before:**
+    ```ini
+    ExecStart=/usr/local/bin/package-registry -address 0.0.0.0:8080 -config /etc/package-registry/config.yml
+    ```
+
+    **After (Proxying to the official Elastic EPR):**
+    ```ini
+    ExecStart=/usr/local/bin/package-registry -address 0.0.0.0:8080 --feature-proxy-mode=true -proxy-to=https://epr.elastic.co -config /etc/package-registry/config.yml
+    ```
+    *You can also combine this with the metrics flag.*
+
+3.  Save the file, then reload the systemd daemon and restart the service:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl restart package-registry.service
+    ```
+
+### Enabling APM Tracing
+
+To monitor the performance of the `elastic-package-registry` service with Elastic APM, you can configure it using environment variables. The recommended way to do this is to place them in a dedicated file that the systemd service will load.
+
+1.  Create and edit a new environment file:
+    ```bash
+    sudo vim /etc/package-registry/apm.conf
+    ```
+
+2.  Add your APM server details to this file. Here is an example:
+    ```ini
+    # Sets the service name that appears in the APM UI.
+    ELASTIC_APM_SERVICE_NAME="Elastic Package Integration"
+
+    # Defines the environment (e.g., production, staging) for filtering in the APM UI.
+    ELASTIC_APM_ENVIRONMENT="production"
+
+    # Explicitly enables or disables APM instrumentation.
+    ELASTIC_APM_ACTIVE="true"
+
+    # Address of the APM Server. Instrumentation is disabled if this is not set.
+    ELASTIC_APM_SERVER_URL=https://your-apm-server:8200
+
+    # Secret token for authentication, if configured on the APM Server.
+    ELASTIC_APM_SECRET_TOKEN=YourSecretToken
+
+    # Sample rate for transaction collection (0.0 to 1.0). Default is 1.0 (all transactions).
+    ELASTIC_APM_TRANSACTION_SAMPLE_RATE=1.0
+    ```
+
+3.  Next, tell the systemd service to load this file. The best practice is to create a service override file.
+    ```bash
+    sudo systemctl edit package-registry.service
+    ```
+    This will open a blank file. Add the following content to it. The `-` before the path tells systemd not to error if the file is missing.
+    ```ini
+    [Service]
+    EnvironmentFile=-/etc/package-registry/apm.conf
+    ```
+
+4.  Save the file, then reload the systemd daemon and restart the service to apply the changes:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl restart package-registry.service
+    ```
+    The service will now start sending tracing data to your APM server.
+
 ## Usage
 
 ### Managing the Service
 
 When you install the `.deb` or `.rpm` package, the following is configured:
 
-* **Binary:** `/usr/bin/package-registry`
+* **Binary:** `/usr/local/bin/package-registry`
 * **Config File:** `/etc/package-registry/config.yml`
 * **Data Directory:** `/var/package-registry/packages`
 * **Service File:** `/usr/lib/systemd/system/package-registry.service`
