@@ -104,7 +104,13 @@ jobs:
           sed -i '/- .\/testdata\/local-storage/d' $CONFIG_FILE
           echo "Modified config.yml content:"
           cat $CONFIG_FILE
-      
+
+      - name: Verify files in workspace (Debug)
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          echo "Listing all files in the root directory:"
+          ls -la
+
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
         env:
