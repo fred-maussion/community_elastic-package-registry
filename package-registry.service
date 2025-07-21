@@ -4,6 +4,7 @@ Description=Elastic Package Registry Services
 [Service]
 User=root
 WorkingDirectory=/etc/package-registry
+EnvironmentFile=-/etc/package-registry/package-registry-env.conf
 ExecStart=/usr/local/bin/package-registry -address 0.0.0.0:8080 -config /etc/package-registry/config.yml 
 # optional items below
 Restart=always

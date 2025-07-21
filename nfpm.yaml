@@ -39,6 +39,12 @@ contents:
     file_info:
       mode: 0755 # Make it executable
 
+  # The env file from the repository, marked as a config file
+  # so it is not overwritten on package update.
+  - src: ./package-registry-env.conf
+    dst: /etc/package-registry/package-registry-env.conf
+    type: config|noreplace
+
   # The systemd service file from your repository
   - src: ./package-registry.service
     dst: /usr/lib/systemd/system/package-registry.service
