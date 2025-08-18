@@ -104,13 +104,7 @@ jobs:
           sed -i '/- .\/testdata\/local-storage/d' $CONFIG_FILE
           echo "Modified config.yml content:"
           cat $CONFIG_FILE
-
-      - name: Verify files in workspace (Debug)
-        if: steps.decide.outputs.proceed == 'true'
-        run: |
-          echo "Listing all files in the root directory:"
-          ls -la
-
+      
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
         env:
@@ -124,11 +118,37 @@ jobs:
           echo "Packages built:"
           ls -l *.deb *.rpm
 
+      - name: Create Tar.gz Archive
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          echo "Creating tar.gz archive..."
+          PACKAGE_VERSION=${{ steps.get_epr_release.outputs.tag }}
+          ARCHIVE_NAME="elastic-package-registry-${PACKAGE_VERSION}"
+          # Create a staging directory to gather all files
+          mkdir -p "staging/${ARCHIVE_NAME}/etc/package-registry"
+          mkdir -p "staging/${ARCHIVE_NAME}/usr/bin"
+          mkdir -p "staging/${ARCHIVE_NAME}/scripts"
+
+          # Copy all the necessary artifacts into the staging directory
+          cp ./source/package-registry "staging/${ARCHIVE_NAME}/usr/bin/"
+          cp ./source/config.yml "staging/${ARCHIVE_NAME}/etc/package-registry/"
+          cp ./package-registry-env.conf "staging/${ARCHIVE_NAME}/etc/package-registry/"
+          cp ./package-registry.service "staging/${ARCHIVE_NAME}/"
+          cp ./scripts/postinstall.sh "staging/${ARCHIVE_NAME}/scripts/"
+          cp ./scripts/preremove.sh "staging/${ARCHIVE_NAME}/scripts/"
+          cp ./README.md "staging/${ARCHIVE_NAME}/"
+
+          # Create the tarball from the staging directory
+          cd staging
+          tar -czf "../${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          cd ..
+          echo "Archive created: ${ARCHIVE_NAME}.tar.gz"
+
       - name: Generate Checksums
         if: steps.decide.outputs.proceed == 'true'
         run: |
           echo "Generating checksums for packages..."
-          for pkg in *.deb *.rpm; do
+          for pkg in *.deb *.rpm *.tar.gz; do
             md5sum "$pkg" > "${pkg}.md5"
             sha256sum "$pkg" > "${pkg}.sha256"
           done
@@ -140,11 +160,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Create a new release using the GitHub CLI, uploading the packages and their checksums.
+          # Create a new release using the GitHub CLI, uploading all packages and their checksums.
           gh release create ${{ steps.get_epr_release.outputs.tag }} \
             --title "Release ${{ steps.get_epr_release.outputs.tag }}" \
             --notes "${{ steps.get_epr_release.outputs.changelog }}" \
-            *.deb *.rpm *.md5 *.sha256
+            *.deb *.rpm *.tar.gz *.md5 *.sha256
           echo "Successfully created release ${{ steps.get_epr_release.outputs.tag }}"
 
       - name: No new version found
