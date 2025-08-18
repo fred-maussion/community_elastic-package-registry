@@ -136,7 +136,6 @@ jobs:
           cp ./package-registry.service "staging/${ARCHIVE_NAME}/"
           cp ./scripts/postinstall.sh "staging/${ARCHIVE_NAME}/scripts/"
           cp ./scripts/preremove.sh "staging/${ARCHIVE_NAME}/scripts/"
-          cp ./README.md "staging/${ARCHIVE_NAME}/"
 
           # Create the tarball from the staging directory
           cd staging
