@@ -48,6 +48,7 @@ contents:
   # The systemd service file from your repository
   - src: ./package-registry.service
     dst: /usr/lib/systemd/system/package-registry.service
+    type: config|noreplace
 
 # Scripts to run on package installation, upgrade, and removal.
 scripts:
