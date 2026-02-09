@@ -85,23 +85,23 @@ We recommend using GVM (Go Version Manager) to install and manage Go versions.
 
 * **Linux (amd64)**
     ```bash
-    curl -sL -o /usr/local/bin/gvm [https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-linux-amd64](https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-linux-amd64)
+    curl -sL -o /usr/local/bin/gvm https://github.com/andrewkroh/gvm/releases/download/v0.6.0/gvm-linux-amd64
     chmod +x /usr/local/bin/gvm
-    eval "$(gvm 1.23.2)"
+    eval "$(gvm 1.24)"
     go version
     ```
 * **Linux (arm64)**
     ```bash
-    curl -sL -o /usr/local/bin/gvm [https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-linux-arm64](https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-linux-arm64)
+    curl -sL -o /usr/local/bin/gvm https://github.com/andrewkroh/gvm/releases/download/v0.6.0/gvm-linux-arm64
     chmod +x /usr/local/bin/gvm
-    eval "$(gvm 1.23.2)"
+    eval "$(gvm 1.24)"
     go version
     ```
 * **macOS (universal)**
     ```bash
-    sudo curl -sL -o /usr/local/bin/gvm [https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-darwin-all](https://github.com/andrewkroh/gvm/releases/download/v0.5.2/gvm-darwin-all)
+    sudo curl -sL -o /usr/local/bin/gvm https://github.com/andrewkroh/gvm/releases/download/v0.6.0/gvm-darwin-all
     sudo chmod +x /usr/local/bin/gvm
-    eval "$(gvm 1.23.2)"
+    eval "$(gvm 1.24)"
     go version
     ```
 
@@ -110,7 +110,7 @@ We recommend using GVM (Go Version Manager) to install and manage Go versions.
 With Go installed, you can now install Mage.
 
 ```bash
-git clone [https://github.com/magefile/mage](https://github.com/magefile/mage)
+git clone https://github.com/magefile/mage
 cd mage
 go run bootstrap.go
 mage --version
