@@ -361,12 +361,17 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ needs.build-packages.outputs.changelog }}
+          RELEASE_TAG: ${{ needs.build-packages.outputs.tag }}
         run: |
           set -euo pipefail
 
+          printf '%s\n' "$RELEASE_NOTES" > release-notes.md
+
           # Create a new release using the GitHub CLI, uploading all packages and their checksums.
-          gh release create ${{ needs.build-packages.outputs.tag }} \
-            --title "Release ${{ needs.build-packages.outputs.tag }}" \
-            --notes "${{ needs.build-packages.outputs.changelog }}" \
+          gh release create "$RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            --title "Release $RELEASE_TAG" \
+            --notes-file release-notes.md \
             ./*.deb ./*.rpm ./*.tar.gz ./*.md5 ./*.sha256
-          echo "Successfully created release ${{ needs.build-packages.outputs.tag }}"
+          echo "Successfully created release $RELEASE_TAG"
