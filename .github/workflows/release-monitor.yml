@@ -70,11 +70,13 @@ jobs:
           fi
 
           # Pass the extracted data to subsequent steps
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "tarball_url=${TARBALL_URL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${TAG}"
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+            echo "tarball_url=${TARBALL_URL}"
+          } >> "$GITHUB_OUTPUT"
           echo "Found latest Elastic Package Registry release: ${TAG}"
 
       - name: Get Latest Release from this Repo
@@ -144,7 +146,7 @@ jobs:
           grep -F -- "- /var/package-registry/packages" "$CONFIG_FILE"
           echo "Modified config.yml content:"
           cat "$CONFIG_FILE"
-      
+
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
         env:
@@ -158,7 +160,7 @@ jobs:
           ~/go/bin/nfpm package -f nfpm.yaml --packager deb --target .
           ~/go/bin/nfpm package -f nfpm.yaml --packager rpm --target .
           echo "Packages built:"
-          ls -l *.deb *.rpm
+          ls -l ./*.deb ./*.rpm
 
       - name: Create Tar.gz Archive
         if: steps.decide.outputs.proceed == 'true'
@@ -193,12 +195,12 @@ jobs:
           set -euo pipefail
 
           echo "Generating checksums for packages..."
-          for pkg in *.deb *.rpm *.tar.gz; do
+          for pkg in ./*.deb ./*.rpm ./*.tar.gz; do
             md5sum "$pkg" > "${pkg}.md5"
             sha256sum "$pkg" > "${pkg}.sha256"
           done
           echo "Checksums generated:"
-          ls -l *.md5 *.sha256
+          ls -l ./*.md5 ./*.sha256
 
       - name: Create GitHub Release
         if: steps.decide.outputs.proceed == 'true'
@@ -211,7 +213,7 @@ jobs:
           gh release create ${{ steps.get_epr_release.outputs.tag }} \
             --title "Release ${{ steps.get_epr_release.outputs.tag }}" \
             --notes "${{ steps.get_epr_release.outputs.changelog }}" \
-            *.deb *.rpm *.tar.gz *.md5 *.sha256
+            ./*.deb ./*.rpm ./*.tar.gz ./*.md5 ./*.sha256
           echo "Successfully created release ${{ steps.get_epr_release.outputs.tag }}"
 
       - name: No new version found

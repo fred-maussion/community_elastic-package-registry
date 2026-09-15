@@ -37,7 +37,7 @@ contents:
   - src: ./source/package-registry
     dst: /usr/local/bin/package-registry
     file_info:
-      mode: 0755 # Make it executable
+      mode: 0755  # Make it executable
 
   # The env file from the repository, marked as a config file
   # so it is not overwritten on package update.

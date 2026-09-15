@@ -1,0 +1,77 @@
+---
+name: Static Checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "**/*.sh"
+      - "**/*.yaml"
+      - "**/*.yml"
+      - ".yamllint"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+      - "**/*.sh"
+      - "**/*.yaml"
+      - "**/*.yml"
+      - ".yamllint"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ACTIONLINT_VERSION: 1.7.12
+  YAMLLINT_VERSION: 1.38.0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install static check tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y shellcheck python3-pip
+          python3 -m pip install --user "yamllint==${YAMLLINT_VERSION}"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+          mkdir -p /tmp/actionlint
+          gh release download "v${ACTIONLINT_VERSION}" \
+            --repo rhysd/actionlint \
+            --pattern "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            --dir /tmp/actionlint
+          tar -xzf "/tmp/actionlint/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C /tmp/actionlint
+          sudo install -m 0755 /tmp/actionlint/actionlint /usr/local/bin/actionlint
+
+      - name: Run shellcheck
+        run: |
+          set -euo pipefail
+
+          shellcheck manage_package.sh scripts/*.sh
+
+      - name: Run yamllint
+        run: |
+          set -euo pipefail
+
+          yamllint .
+
+      - name: Run actionlint
+        run: |
+          set -euo pipefail
+
+          actionlint .github/workflows/*.yml
