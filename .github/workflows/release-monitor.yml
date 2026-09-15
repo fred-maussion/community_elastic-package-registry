@@ -43,7 +43,7 @@ jobs:
       changelog: ${{ steps.get_epr_release.outputs.changelog }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -323,7 +323,7 @@ jobs:
             package_glob: "*.rpm"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Download package artifacts
         uses: actions/download-artifact@v4
