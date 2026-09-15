@@ -1,0 +1,14 @@
+---
+extends: default
+
+ignore: |
+  openspec/
+
+rules:
+  comments:
+    require-starting-space: false
+  document-start: disable
+  line-length:
+    max: 140
+    level: warning
+  truthy: disable
