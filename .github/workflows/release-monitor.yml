@@ -172,11 +172,11 @@ jobs:
           ARCHIVE_NAME="elastic-package-registry-${PACKAGE_VERSION}"
           # Create a staging directory to gather all files
           mkdir -p "staging/${ARCHIVE_NAME}/etc/package-registry"
-          mkdir -p "staging/${ARCHIVE_NAME}/usr/bin"
+          mkdir -p "staging/${ARCHIVE_NAME}/usr/local/bin"
           mkdir -p "staging/${ARCHIVE_NAME}/scripts"
 
           # Copy all the necessary artifacts into the staging directory
-          cp ./source/package-registry "staging/${ARCHIVE_NAME}/usr/bin/"
+          cp ./source/package-registry "staging/${ARCHIVE_NAME}/usr/local/bin/"
           cp ./source/config.yml "staging/${ARCHIVE_NAME}/etc/package-registry/"
           cp ./package-registry-env.conf "staging/${ARCHIVE_NAME}/etc/package-registry/"
           cp ./package-registry.service "staging/${ARCHIVE_NAME}/"
