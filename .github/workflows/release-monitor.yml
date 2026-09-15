@@ -14,6 +14,14 @@ on:
 permissions:
   contents: write
 
+env:
+  MAGE_VERSION: v1.17.2
+  NFPM_VERSION: v2.47.0
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -24,33 +32,49 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21' # nfpm and mage require Go
+          go-version: '1.26.x'
 
       - name: Install Mage
-        run: go install github.com/magefile/mage@latest
+        run: go install "github.com/magefile/mage@${MAGE_VERSION}"
 
       - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        run: go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
 
       - name: Get Latest Elastic Package Registry Release
         id: get_epr_release
         run: |
+          set -euo pipefail
+
           # Use the GitHub API to get the latest release information from the target repository
-          LATEST_RELEASE_JSON=$(curl --silent \
+          LATEST_RELEASE_JSON=$(curl --fail --show-error --silent --location \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/elastic/package-registry/releases/latest)
 
           # Use jq to parse the JSON and extract the tag name and release notes (changelog)
           TAG=$(echo "$LATEST_RELEASE_JSON" | jq -r .tag_name)
-          CHANGELOG=$(echo "$LATEST_RELEASE_JSON" | jq -r .body)
+          CHANGELOG=$(echo "$LATEST_RELEASE_JSON" | jq -r '.body // ""')
           TARBALL_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r .tarball_url)
 
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "GitHub API response did not include a valid tag_name."
+            exit 1
+          fi
+
+          if [ -z "$TARBALL_URL" ] || [ "$TARBALL_URL" = "null" ]; then
+            echo "GitHub API response did not include a valid tarball_url."
+            exit 1
+          fi
+
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="No upstream release notes were provided."
+          fi
+
           # Pass the extracted data to subsequent steps
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "tarball_url=${TARBALL_URL}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "tarball_url=${TARBALL_URL}" >> "$GITHUB_OUTPUT"
           echo "Found latest Elastic Package Registry release: ${TAG}"
 
       - name: Get Latest Release from this Repo
@@ -58,52 +82,68 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+
           # Use the GitHub CLI to get the latest release tag from the current repository
           # The `|| true` prevents the workflow from failing if no releases exist yet
           LATEST_TAG=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' || true)
-          echo "tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
           echo "Latest release in this repo: ${LATEST_TAG}"
 
       - name: Compare versions and decide to proceed
         id: decide
         if: steps.get_epr_release.outputs.tag != steps.get_demo_release.outputs.tag
         run: |
+          set -euo pipefail
+
           echo "New version found. Proceeding with build and release."
-          echo "proceed=true" >> $GITHUB_OUTPUT
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
 
       - name: Download and Extract Source Archive
         if: steps.decide.outputs.proceed == 'true'
         run: |
+          set -euo pipefail
+
           # Download the tarball and extract it.
           # The `strip-components=1` option removes the top-level directory from the archive,
           # placing the contents directly into the 'source' directory.
-          mkdir source
-          curl -L ${{ steps.get_epr_release.outputs.tarball_url }} | tar xz -C source --strip-components=1
+          mkdir -p source
+          curl --fail --show-error --silent --location \
+            --output source.tar.gz \
+            "${{ steps.get_epr_release.outputs.tarball_url }}"
+          tar xzf source.tar.gz -C source --strip-components=1
           echo "Source code downloaded and extracted to ./source"
           ls -la ./source
 
       - name: Build Binary from Source
         if: steps.decide.outputs.proceed == 'true'
         run: |
+          set -euo pipefail
+
           echo "Building binary using mage..."
           cd source
           # Run the build command using the installed mage
           ~/go/bin/mage build
           echo "Build complete. Checking for binary:"
           ls -l package-registry
+          test -x package-registry
+          ./package-registry --version
 
       - name: Modify config.yml
         if: steps.decide.outputs.proceed == 'true'
         run: |
+          set -euo pipefail
+
           CONFIG_FILE=./source/config.yml
           echo "Original config.yml content:"
-          cat $CONFIG_FILE
+          cat "$CONFIG_FILE"
           # Replace the first package path
-          sed -i 's|- ./testdata/package|- /var/package-registry/packages|g' $CONFIG_FILE
+          sed -i 's|- ./testdata/package|- /var/package-registry/packages|g' "$CONFIG_FILE"
           # Remove the second package path line
-          sed -i '/- .\/testdata\/local-storage/d' $CONFIG_FILE
+          sed -i '/- .\/testdata\/local-storage/d' "$CONFIG_FILE"
+          grep -F -- "- /var/package-registry/packages" "$CONFIG_FILE"
           echo "Modified config.yml content:"
-          cat $CONFIG_FILE
+          cat "$CONFIG_FILE"
       
       - name: Build Packages with nfpm
         if: steps.decide.outputs.proceed == 'true'
@@ -111,6 +151,8 @@ jobs:
           # This environment variable will be expanded by nfpm inside the nfpm.yaml file.
           PACKAGE_VERSION: ${{ steps.get_epr_release.outputs.tag }}
         run: |
+          set -euo pipefail
+
           echo "Building packages for version ${PACKAGE_VERSION}..."
           # The version is now correctly set inside nfpm.yaml via env var expansion.
           ~/go/bin/nfpm package -f nfpm.yaml --packager deb --target .
@@ -121,6 +163,8 @@ jobs:
       - name: Create Tar.gz Archive
         if: steps.decide.outputs.proceed == 'true'
         run: |
+          set -euo pipefail
+
           echo "Creating tar.gz archive..."
           PACKAGE_VERSION=${{ steps.get_epr_release.outputs.tag }}
           ARCHIVE_NAME="elastic-package-registry-${PACKAGE_VERSION}"
@@ -146,6 +190,8 @@ jobs:
       - name: Generate Checksums
         if: steps.decide.outputs.proceed == 'true'
         run: |
+          set -euo pipefail
+
           echo "Generating checksums for packages..."
           for pkg in *.deb *.rpm *.tar.gz; do
             md5sum "$pkg" > "${pkg}.md5"
@@ -159,6 +205,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+
           # Create a new release using the GitHub CLI, uploading all packages and their checksums.
           gh release create ${{ steps.get_epr_release.outputs.tag }} \
             --title "Release ${{ steps.get_epr_release.outputs.tag }}" \
@@ -168,4 +216,7 @@ jobs:
 
       - name: No new version found
         if: steps.decide.outputs.proceed != 'true'
-        run: echo "The latest release in this repo already matches the elastic/package-registry release. Nothing to do."
+        run: |
+          set -euo pipefail
+
+          echo "The latest release in this repo already matches the elastic/package-registry release. Nothing to do."
