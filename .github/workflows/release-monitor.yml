@@ -162,14 +162,41 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Building binary using mage..."
-          cd source
-          # Run the build command using the installed mage
-          ~/go/bin/mage build
+          GO_VERSION=$(go env GOVERSION | sed 's/^go//')
+          echo "Building binary using mage inside rockylinux:8 with Go ${GO_VERSION}..."
+
+          # shellcheck disable=SC2016
+          docker run --rm \
+            --env "GO_VERSION=${GO_VERSION}" \
+            --env "MAGE_VERSION=${MAGE_VERSION}" \
+            --volume "$PWD/source:/workspace/source" \
+            --workdir /workspace/source \
+            rockylinux:8 \
+            bash -c '
+              set -euo pipefail
+
+              dnf install -y ca-certificates curl gcc git gzip make tar >/dev/null
+              curl --fail --show-error --silent --location \
+                --output /tmp/go.tgz \
+                "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+              tar -C /usr/local -xzf /tmp/go.tgz
+
+              export PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
+              go version
+              go install "github.com/magefile/mage@${MAGE_VERSION}"
+              mage build
+
+              test -x package-registry
+              ./package-registry --version
+            '
+
           echo "Build complete. Checking for binary:"
-          ls -l package-registry
-          test -x package-registry
-          ./package-registry --version
+          ls -l source/package-registry
+          test -x source/package-registry
+          docker run --rm \
+            --volume "$PWD/source/package-registry:/usr/local/bin/package-registry:ro" \
+            rockylinux:8 \
+            /usr/local/bin/package-registry --version
 
       - name: Modify config.yml
         if: steps.decide.outputs.proceed == 'true'
@@ -289,6 +316,10 @@ jobs:
           - name: rockylinux-9-rpm
             package_type: rpm
             container_image: rockylinux:9
+            package_glob: "*.rpm"
+          - name: rockylinux-8-rpm
+            package_type: rpm
+            container_image: rockylinux:8
             package_glob: "*.rpm"
     steps:
       - name: Checkout repository
