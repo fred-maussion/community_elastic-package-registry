@@ -5,6 +5,17 @@ name: Build and Release Elastic Package Registry
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: "Build packages and run smoke tests even when no new upstream release is available."
+        required: false
+        default: false
+        type: boolean
+      publish_release:
+        description: "Create the GitHub release after a successful build."
+        required: false
+        default: true
+        type: boolean
 
   # Runs on a schedule (once a day at 2:00 AM UTC)
   schedule:
@@ -23,8 +34,13 @@ defaults:
     shell: bash
 
 jobs:
-  build-and-release:
+  build-packages:
     runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.decide.outputs.proceed }}
+      create_release: ${{ steps.decide.outputs.create_release }}
+      tag: ${{ steps.get_epr_release.outputs.tag }}
+      changelog: ${{ steps.get_epr_release.outputs.changelog }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -94,12 +110,36 @@ jobs:
 
       - name: Compare versions and decide to proceed
         id: decide
-        if: steps.get_epr_release.outputs.tag != steps.get_demo_release.outputs.tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FORCE_BUILD: ${{ inputs.force_build || false }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release || false }}
         run: |
           set -euo pipefail
 
-          echo "New version found. Proceeding with build and release."
-          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          proceed=false
+          create_release=false
+
+          if [ "${{ steps.get_epr_release.outputs.tag }}" != "${{ steps.get_demo_release.outputs.tag }}" ]; then
+            echo "New version found. Proceeding with build."
+            proceed=true
+
+            if [ "$EVENT_NAME" != "workflow_dispatch" ] || [ "$PUBLISH_RELEASE" = "true" ]; then
+              create_release=true
+            else
+              echo "Manual dry run requested. Release creation will be skipped."
+            fi
+          elif [ "$FORCE_BUILD" = "true" ]; then
+            echo "No new version found, but force_build=true. Proceeding with build and smoke tests."
+            proceed=true
+          else
+            echo "The latest release in this repo already matches the elastic/package-registry release. Nothing to do."
+          fi
+
+          {
+            echo "proceed=${proceed}"
+            echo "create_release=${create_release}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download and Extract Source Archive
         if: steps.decide.outputs.proceed == 'true'
@@ -202,19 +242,18 @@ jobs:
           echo "Checksums generated:"
           ls -l ./*.md5 ./*.sha256
 
-      - name: Create GitHub Release
+      - name: Upload package artifacts
         if: steps.decide.outputs.proceed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          # Create a new release using the GitHub CLI, uploading all packages and their checksums.
-          gh release create ${{ steps.get_epr_release.outputs.tag }} \
-            --title "Release ${{ steps.get_epr_release.outputs.tag }}" \
-            --notes "${{ steps.get_epr_release.outputs.changelog }}" \
-            ./*.deb ./*.rpm ./*.tar.gz ./*.md5 ./*.sha256
-          echo "Successfully created release ${{ steps.get_epr_release.outputs.tag }}"
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-artifacts
+          path: |
+            ./*.deb
+            ./*.rpm
+            ./*.tar.gz
+            ./*.md5
+            ./*.sha256
+          if-no-files-found: error
 
       - name: No new version found
         if: steps.decide.outputs.proceed != 'true'
@@ -222,3 +261,81 @@ jobs:
           set -euo pipefail
 
           echo "The latest release in this repo already matches the elastic/package-registry release. Nothing to do."
+
+  smoke-test-packages:
+    if: needs.build-packages.outputs.proceed == 'true'
+    needs: build-packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-26.04-deb
+            package_type: deb
+            container_image: ubuntu:26.04
+            package_glob: "*.deb"
+          - name: ubuntu-24.04-deb
+            package_type: deb
+            container_image: ubuntu:24.04
+            package_glob: "*.deb"
+          - name: debian-13-deb
+            package_type: deb
+            container_image: debian:13
+            package_glob: "*.deb"
+          - name: debian-12-deb
+            package_type: deb
+            container_image: debian:12
+            package_glob: "*.deb"
+          - name: rockylinux-9-rpm
+            package_type: rpm
+            container_image: rockylinux:9
+            package_glob: "*.rpm"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: package-artifacts
+
+      - name: Smoke test package on ${{ matrix.container_image }}
+        run: |
+          set -euo pipefail
+
+          PACKAGE=$(find . -maxdepth 1 -type f -name '${{ matrix.package_glob }}' -print -quit)
+
+          if [ -z "$PACKAGE" ]; then
+            echo "Expected package artifact matching ${{ matrix.package_glob }}."
+            exit 1
+          fi
+
+          ./scripts/smoke_test_package.sh \
+            '${{ matrix.package_type }}' \
+            '${{ matrix.container_image }}' \
+            "$PACKAGE"
+
+  release:
+    if: needs.build-packages.outputs.create_release == 'true'
+    needs:
+      - build-packages
+      - smoke-test-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: package-artifacts
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Create a new release using the GitHub CLI, uploading all packages and their checksums.
+          gh release create ${{ needs.build-packages.outputs.tag }} \
+            --title "Release ${{ needs.build-packages.outputs.tag }}" \
+            --notes "${{ needs.build-packages.outputs.changelog }}" \
+            ./*.deb ./*.rpm ./*.tar.gz ./*.md5 ./*.sha256
+          echo "Successfully created release ${{ needs.build-packages.outputs.tag }}"
